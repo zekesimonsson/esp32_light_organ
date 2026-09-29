@@ -1,81 +1,50 @@
 #include <stdio.h>
 #include <stdint.h>
-#include <math.h>
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
 #include "audio_input.h"
-
-
-static double calculate_rms(
-    const int32_t *samples,
-    size_t sample_count)
-{
-    if (sample_count == 0)
-    {
-        return 0.0;
-    }
-
-    /*
-     * Calculate DC component.
-     */
-    int64_t sum = 0;
-
-    for (size_t i = 0; i < sample_count; i++)
-    {
-        sum += samples[i];
-    }
-
-    double mean =
-        (double)sum / sample_count;
-
-    /*
-     * Calculate RMS after removing DC.
-     */
-    double sum_squared = 0.0;
-
-    for (size_t i = 0; i < sample_count; i++)
-    {
-        double sample =
-            (double)samples[i] - mean;
-
-        sum_squared += sample * sample;
-    }
-
-    return sqrt(
-        sum_squared / sample_count
-    );
-}
+#include "audio_analyzer.h"
 
 
 void app_main(void)
 {
     printf("\n");
     printf("=============================\n");
-    printf(" LIGHT ORGAN\n");
+    printf(" LIGHT ORGAN - FFT TEST\n");
     printf("=============================\n\n");
 
     audio_input_init();
+    audio_analyzer_init();
 
     int32_t samples[AUDIO_BLOCK_SIZE];
 
-    while (1)
+while (1)
+{
+    size_t sample_count =
+        audio_input_read(
+            samples,
+            AUDIO_BLOCK_SIZE
+        );
+
+    audio_analysis_t analysis;
+
+    if (audio_analyzer_process(
+            samples,
+            sample_count,
+            &analysis))
     {
-        size_t sample_count =
-            audio_input_read(
-                samples,
-                AUDIO_BLOCK_SIZE
-            );
-
-        double rms =
-            calculate_rms(
-                samples,
-                sample_count
-            );
-
-        printf("RMS: %9.0f\n", rms);
-
-        vTaskDelay(pdMS_TO_TICKS(100));
+        printf(
+            "RMS:%8.0f  "
+            "B:%10.0f  "
+            "LM:%10.0f  "
+            "M:%10.0f  "
+            "HM:%10.0f  "
+            "T:%10.0f\n",
+            analysis.rms,
+            analysis.bass,
+            analysis.low_mid,
+            analysis.mid,
+            analysis.high_mid,
+            analysis.treble
+        );
     }
-}
+}}
