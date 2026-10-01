@@ -33,18 +33,18 @@ while (1)
             &analysis))
     {
         printf(
-            "RMS:%8.0f  "
-            "B:%10.0f  "
-            "LM:%10.0f  "
-            "M:%10.0f  "
-            "HM:%10.0f  "
-            "T:%10.0f\n",
-            analysis.rms,
-            analysis.bass,
-            analysis.low_mid,
-            analysis.mid,
-            analysis.high_mid,
-            analysis.treble
+            "B:%3.0f%% "
+            "LM:%3.0f%% "
+            "M:%3.0f%% "
+            "HM:%3.0f%% "
+            "T:%3.0f%% "
+            "%s\n",
+            analysis.bass_level * 100.0f,
+            analysis.low_mid_level * 100.0f,
+            analysis.mid_level * 100.0f,
+            analysis.high_mid_level * 100.0f,
+            analysis.treble_level * 100.0f,
+            analysis.beat ? "<<< BEAT >>>" : ""
         );
     }
 }}

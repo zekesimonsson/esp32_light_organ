@@ -17,6 +17,24 @@ static float fft_data[FFT_SIZE * 2];
 static int32_t fft_samples[FFT_SIZE];
 static size_t fft_sample_count = 0;
 
+static float bass_average = 0.0f;
+static bool beat_initialized = false;
+static int beat_holdoff = 0;
+
+typedef struct
+{
+    float noise_floor;
+    float peak;
+    bool initialized;
+
+} band_normalizer_t;
+
+static band_normalizer_t bass_normalizer;
+static band_normalizer_t low_mid_normalizer;
+static band_normalizer_t mid_normalizer;
+static band_normalizer_t high_mid_normalizer;
+static band_normalizer_t treble_normalizer;
+
 void audio_analyzer_init(void)
 {
     esp_err_t ret =
@@ -81,6 +99,154 @@ static float calculate_band(
     }
 
     return sum / bin_count;
+}
+
+static float normalize_band(
+    float value,
+    band_normalizer_t *normalizer)
+{
+    /*
+     * Initialize from first measurement.
+     */
+    if (!normalizer->initialized)
+    {
+        normalizer->noise_floor = value;
+        normalizer->peak = value * 2.0f;
+        normalizer->initialized = true;
+
+        return 0.0f;
+    }
+
+    /*
+     * Noise floor follows downward changes relatively
+     * quickly, but upward changes very slowly.
+     *
+     * This allows the analyzer to adapt to the
+     * background noise of the room.
+     */
+    if (value < normalizer->noise_floor)
+    {
+        normalizer->noise_floor =
+            normalizer->noise_floor * 0.90f +
+            value * 0.10f;
+    }
+    else
+    {
+        normalizer->noise_floor =
+            normalizer->noise_floor * 0.999f +
+            value * 0.001f;
+    }
+
+    /*
+     * Peak follows new peaks immediately.
+     * Otherwise it slowly decays.
+     */
+    if (value > normalizer->peak)
+    {
+        normalizer->peak = value;
+    }
+    else
+    {
+        normalizer->peak *= 0.995f;
+    }
+
+    /*
+     * Peak must always stay sufficiently above
+     * the noise floor.
+     */
+    float minimum_range =
+        normalizer->noise_floor * 0.5f;
+
+    if (minimum_range < 1.0f)
+    {
+        minimum_range = 1.0f;
+    }
+
+    if (normalizer->peak <
+        normalizer->noise_floor + minimum_range)
+    {
+        normalizer->peak =
+            normalizer->noise_floor + minimum_range;
+    }
+
+    /*
+     * Normalize to 0.0 - 1.0.
+     */
+    float level =
+        (value - normalizer->noise_floor) /
+        (normalizer->peak -
+         normalizer->noise_floor);
+
+    if (level < 0.0f)
+    {
+        level = 0.0f;
+    }
+
+    if (level > 1.0f)
+    {
+        level = 1.0f;
+    }
+
+    /*
+     * Small dead zone to prevent lights flickering
+     * due to background noise.
+     */
+    const float dead_zone = 0.05f;
+
+    if (level < dead_zone)
+    {
+        level = 0.0f;
+    }
+    else
+    {
+        level =
+            (level - dead_zone) /
+            (1.0f - dead_zone);
+    }
+
+    return level;
+}
+
+static bool detect_beat(float bass_level)
+{
+    if (!beat_initialized)
+    {
+        bass_average = bass_level;
+        beat_initialized = true;
+        return false;
+    }
+
+    /*
+     * Slowly moving reference level.
+     */
+    bass_average =
+        0.95f * bass_average +
+        0.05f * bass_level;
+
+    /*
+     * Prevent multiple detections of the same beat.
+     */
+    if (beat_holdoff > 0)
+    {
+        beat_holdoff--;
+        return false;
+    }
+
+    /*
+     * A beat must:
+     *
+     * 1. Have a reasonably strong bass level.
+     * 2. Be significantly stronger than
+     *    the recent average.
+     */
+    if ((bass_level > 0.55f) &&
+        (bass_level > bass_average + 0.25f))
+    {
+        beat_holdoff = 5;
+        return true;
+    }
+
+    return false;
 }
 
 bool audio_analyzer_process(
@@ -215,10 +381,45 @@ bool audio_analyzer_process(
 
     result->treble =
         calculate_band(6000.0f, 16000.0f);
+
+    /*
+     * Normalize frequency bands.
+     */
+    result->bass_level =
+        normalize_band(
+            result->bass,
+            &bass_normalizer
+        );
+
+    result->low_mid_level =
+        normalize_band(
+            result->low_mid,
+            &low_mid_normalizer
+        );
+
+    result->mid_level =
+        normalize_band(
+            result->mid,
+            &mid_normalizer
+        );
+
+    result->high_mid_level =
+        normalize_band(
+            result->high_mid,
+            &high_mid_normalizer
+        );
+
+    result->treble_level =
+        normalize_band(
+            result->treble,
+            &treble_normalizer
+        );
     
+    result->beat =
+    detect_beat(result->bass_level);
     /*
      * Start collecting the next FFT block.
-    */
+     */
     fft_sample_count = 0;
 
     return true;
