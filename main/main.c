@@ -37,16 +37,33 @@ void app_main(void)
                 &lights);
 
             printf(
-                "B:%3.0f%% M:%3.0f%% T:%3.0f%% %s | "
-                "RGBW: %3d %3d %3d %3d\n",
-                analysis.bass_level * 100.0f,
-                analysis.mid_level * 100.0f,
-                analysis.treble_level * 100.0f,
+                "%s | "
+                "L1:%3d %3d %3d %3d | "
+                "L2:%3d %3d %3d %3d | "
+                "L3:%3d %3d %3d %3d | "
+                "L4:%3d %3d %3d %3d\n",
+
                 analysis.beat ? "BEAT" : "    ",
+
                 lights.light[0].red,
                 lights.light[0].green,
                 lights.light[0].blue,
-                lights.light[0].white
+                lights.light[0].white,
+
+                lights.light[1].red,
+                lights.light[1].green,
+                lights.light[1].blue,
+                lights.light[1].white,
+
+                lights.light[2].red,
+                lights.light[2].green,
+                lights.light[2].blue,
+                lights.light[2].white,
+
+                lights.light[3].red,
+                lights.light[3].green,
+                lights.light[3].blue,
+                lights.light[3].white
             );
         }
     }

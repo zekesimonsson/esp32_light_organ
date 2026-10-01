@@ -3,6 +3,7 @@
 #include <string.h>
 
 static float beat_flash = 0.0f;
+static int beat_light = -1;
 
 static uint8_t level_to_dmx(float level)
 {
@@ -18,6 +19,7 @@ static uint8_t level_to_dmx(float level)
 void light_effects_init(void)
 {
     beat_flash = 0.0f;
+    beat_light = -1;
 }
 
 void light_effects_process(
@@ -26,20 +28,19 @@ void light_effects_process(
 {
     memset(state, 0, sizeof(*state));
 
-    /*
-     * Start a new white flash on each detected beat.
-     */
     if (audio->beat)
     {
         beat_flash = 1.0f;
+
+        beat_light++;
+
+        if (beat_light >= LIGHT_COUNT)
+        {
+            beat_light = 0;
+        }
     }
     else
     {
-        /*
-         * Exponential decay.
-         *
-         * One update is approximately 21 ms.
-         */
         beat_flash *= 0.72f;
 
         if (beat_flash < 0.02f)
@@ -62,9 +63,17 @@ void light_effects_process(
 
     for (int i = 0; i < LIGHT_COUNT; i++)
     {
-        state->light[i].red = red;
+        state->light[i].red   = red;
         state->light[i].green = green;
-        state->light[i].blue = blue;
-        state->light[i].white = white;
+        state->light[i].blue  = blue;
+
+        if (i == beat_light)
+        {
+            state->light[i].white = white;
+        }
+        else
+        {
+            state->light[i].white = 0;
+        }
     }
 }
