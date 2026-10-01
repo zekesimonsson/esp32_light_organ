@@ -3,7 +3,7 @@ idf_component_register(
         "main.c"
         "audio_input.c"
         "audio_analyzer.c"
-
+        "light_effects.c"
     INCLUDE_DIRS
         "."
 )
