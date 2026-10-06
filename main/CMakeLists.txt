@@ -4,6 +4,7 @@ idf_component_register(
         "audio_input.c"
         "audio_analyzer.c"
         "light_effects.c"
+        "dmx_output.c"
     INCLUDE_DIRS
         "."
 )

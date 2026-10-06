@@ -4,6 +4,22 @@
 #include "audio_input.h"
 #include "audio_analyzer.h"
 #include "light_effects.h"
+#include "dmx_output.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+static void dmx_task(void *arg)
+{
+    while (1)
+    {
+        dmx_output_send();
+
+        /*
+         * Approximately 30 DMX frames per second.
+         */
+        vTaskDelay(pdMS_TO_TICKS(33));
+    }
+}
 
 void app_main(void)
 {
@@ -15,6 +31,20 @@ void app_main(void)
     audio_input_init();
     audio_analyzer_init();
     light_effects_init();
+    dmx_output_init();
+
+    dmx_output_set_channel(1, 0);
+    dmx_output_set_channel(2, 0);
+    dmx_output_set_channel(3, 0);
+    dmx_output_set_channel(4, 255);
+
+    xTaskCreate(
+        dmx_task,
+        "dmx_task",
+        4096,
+        NULL,
+        5,
+        NULL);
 
     int32_t samples[AUDIO_BLOCK_SIZE];
 
