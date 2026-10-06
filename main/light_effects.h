@@ -25,4 +25,6 @@ void light_effects_process(
     const audio_analysis_t *audio,
     light_state_t *state);
 
+void light_effects_set_brightness(uint8_t percent);
+
 #endif

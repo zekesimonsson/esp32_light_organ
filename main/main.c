@@ -31,6 +31,7 @@ void app_main(void)
     audio_input_init();
     audio_analyzer_init();
     light_effects_init();
+light_effects_set_brightness(30);
     dmx_output_init();
 
     xTaskCreate(
@@ -61,10 +62,26 @@ void app_main(void)
                 &analysis,
                 &lights);
 
-            dmx_output_set_channel(1, lights.light[0].red);
-            dmx_output_set_channel(2, lights.light[0].green);
-            dmx_output_set_channel(3, lights.light[0].blue);
-            dmx_output_set_channel(4, lights.light[0].white);
+            for (int i = 0; i < LIGHT_COUNT; i++)
+            {
+                uint16_t base_channel = 1 + (i * 4);
+
+                dmx_output_set_channel(
+                    base_channel + 0,
+                    lights.light[i].red);
+
+                dmx_output_set_channel(
+                    base_channel + 1,
+                    lights.light[i].green);
+
+                dmx_output_set_channel(
+                    base_channel + 2,
+                    lights.light[i].blue);
+
+                dmx_output_set_channel(
+                    base_channel + 3,
+                    lights.light[i].white);
+            }
 
             printf(
                 "%s | "

@@ -4,6 +4,13 @@
 
 static float beat_flash = 0.0f;
 static int beat_light = -1;
+static uint8_t master_brightness = 100;
+
+static uint8_t apply_brightness(uint8_t value)
+{
+    return (uint8_t)(
+        ((uint16_t)value * master_brightness) / 100);
+}
 
 static uint8_t level_to_dmx(float level)
 {
@@ -63,17 +70,33 @@ void light_effects_process(
 
     for (int i = 0; i < LIGHT_COUNT; i++)
     {
-        state->light[i].red   = red;
-        state->light[i].green = green;
-        state->light[i].blue  = blue;
+        state->light[i].red =
+            apply_brightness(red);
+
+        state->light[i].green =
+            apply_brightness(green);
+
+        state->light[i].blue =
+            apply_brightness(blue);
 
         if (i == beat_light)
         {
-            state->light[i].white = white;
+            state->light[i].white =
+                apply_brightness(white);
         }
         else
         {
             state->light[i].white = 0;
         }
     }
+}
+
+void light_effects_set_brightness(uint8_t percent)
+{
+    if (percent > 100)
+    {
+        percent = 100;
+    }
+
+    master_brightness = percent;
 }
