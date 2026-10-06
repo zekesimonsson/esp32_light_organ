@@ -33,11 +33,6 @@ void app_main(void)
     light_effects_init();
     dmx_output_init();
 
-    dmx_output_set_channel(1, 0);
-    dmx_output_set_channel(2, 0);
-    dmx_output_set_channel(3, 0);
-    dmx_output_set_channel(4, 255);
-
     xTaskCreate(
         dmx_task,
         "dmx_task",
@@ -65,6 +60,11 @@ void app_main(void)
             light_effects_process(
                 &analysis,
                 &lights);
+
+            dmx_output_set_channel(1, lights.light[0].red);
+            dmx_output_set_channel(2, lights.light[0].green);
+            dmx_output_set_channel(3, lights.light[0].blue);
+            dmx_output_set_channel(4, lights.light[0].white);
 
             printf(
                 "%s | "
