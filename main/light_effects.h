@@ -19,6 +19,13 @@ typedef struct
     light_t light[LIGHT_COUNT];
 } light_state_t;
 
+typedef enum
+{
+    LIGHT_EFFECT_CLASSIC = 0,
+    LIGHT_EFFECT_BEAT_CHASE,
+    LIGHT_EFFECT_COUNT
+} light_effect_mode_t;
+
 void light_effects_init(void);
 
 void light_effects_process(
@@ -26,5 +33,7 @@ void light_effects_process(
     light_state_t *state);
 
 void light_effects_set_brightness(uint8_t percent);
+void light_effects_set_beat_brightness(uint8_t percent);
+void light_effects_set_mode(light_effect_mode_t mode);
 
 #endif
