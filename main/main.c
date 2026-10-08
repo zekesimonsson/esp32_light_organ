@@ -32,7 +32,8 @@ void app_main(void)
     audio_analyzer_init();
     light_effects_init();
     light_effects_set_brightness(30);
-    light_effects_set_mode(LIGHT_EFFECT_CLASSIC);
+    light_effects_set_beat_brightness(45);
+    light_effects_set_mode(LIGHT_EFFECT_ALTERNATE);
     dmx_output_init();
 
     xTaskCreate(
