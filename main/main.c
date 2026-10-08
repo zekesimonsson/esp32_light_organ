@@ -7,6 +7,7 @@
 #include "dmx_output.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "web_server.h"
 
 static void dmx_task(void *arg)
 {
@@ -35,6 +36,7 @@ void app_main(void)
     light_effects_set_beat_brightness(45);
     light_effects_set_mode(LIGHT_EFFECT_ALTERNATE);
     dmx_output_init();
+    web_server_init();
 
     xTaskCreate(
         dmx_task,
