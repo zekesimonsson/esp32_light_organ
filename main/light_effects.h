@@ -23,6 +23,7 @@ typedef enum
 {
     LIGHT_EFFECT_CLASSIC = 0,
     LIGHT_EFFECT_BEAT_CHASE,
+    LIGHT_EFFECT_ALTERNATE,
     LIGHT_EFFECT_COUNT
 } light_effect_mode_t;
 
