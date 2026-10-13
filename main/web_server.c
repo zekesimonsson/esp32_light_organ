@@ -1,7 +1,9 @@
 #include "web_server.h"
 
 #include <string.h>
+#include <stdlib.h>
 
+#include "light_control.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_netif.h"
@@ -18,20 +20,49 @@ static const char html_page[] =
     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
     "<style>"
     "body{background:#141b29;color:white;"
-    "font-family:Arial;text-align:center;padding:30px}"
+    "font-family:Arial;text-align:center;padding:25px}"
     "button{background:#3760aa;color:white;"
-    "border:0;border-radius:8px;padding:16px;"
-    "margin:8px;font-size:16px}"
+    "border:0;border-radius:8px;padding:14px;"
+    "margin:5px;font-size:15px}"
+    "input{width:85%;max-width:350px}"
+    ".selected{background:#16836f}"
     "</style>"
     "</head>"
     "<body>"
-    "<h1>Light Organ</h1>"
+    "<h1>Zeke's Light Machine</h1>"
     "<p>ESP32-S3 DMX Controller</p>"
     "<h2>Effect mode</h2>"
-    "<button>Classic</button>"
-    "<button>Beat Chase</button>"
-    "<button>Alternate</button>"
-    "<p>Web server is running!</p>"
+    "<button id='m0' onclick='setMode(0)'>Classic</button>"
+    "<button id='m1' onclick='setMode(1)'>Beat Chase</button>"
+    "<button id='m2' onclick='setMode(2)'>Alternate</button>"
+    "<h2>Master brightness: <span id='bv'>30</span>%</h2>"
+    "<input type='range' min='0' max='100' value='30'"
+    " oninput='bv.textContent=this.value'"
+    " onchange='send(\"/api/brightness\",this.value)'>"
+    "<h2>Beat brightness: <span id='wv'>45</span>%</h2>"
+    "<input type='range' min='0' max='100' value='45'"
+    " oninput='wv.textContent=this.value'"
+    " onchange='send(\"/api/beat-brightness\",this.value)'>"
+    "<p id='status'>Ready</p>"
+    "<script>"
+    "async function send(url,value){"
+    "try{"
+    "let r=await fetch(url,{method:'POST',body:String(value)});"
+    "if(!r.ok)throw Error('HTTP '+r.status);"
+    "document.getElementById('status').textContent='Updated';"
+    "return true;"
+    "}catch(e){"
+    "document.getElementById('status').textContent='Error: '+e.message;"
+    "return false;"
+    "}}"
+    "async function setMode(mode){"
+    "if(await send('/api/mode',mode)){"
+    "document.querySelectorAll('button').forEach("
+    "b=>b.classList.remove('selected'));"
+    "document.getElementById('m'+mode).classList.add('selected');"
+    "}}"
+    "document.getElementById('m2').classList.add('selected');"
+    "</script>"
     "</body>"
     "</html>";
 
@@ -40,6 +71,78 @@ static esp_err_t root_handler(httpd_req_t *req)
     httpd_resp_set_type(req, "text/html");
     return httpd_resp_send(req, html_page,
                            HTTPD_RESP_USE_STRLEN);
+}
+
+static esp_err_t control_handler(httpd_req_t *req)
+{
+    char buffer[16];
+
+    int length = httpd_req_recv(
+        req, buffer, sizeof(buffer) - 1);
+
+    if (length <= 0)
+    {
+        return ESP_FAIL;
+    }
+
+    buffer[length] = '\0';
+
+    char *end;
+    long value = strtol(buffer, &end, 10);
+
+    if ((end == buffer) || (*end != '\0') ||
+        (value < 0) || (value > 100))
+    {
+        httpd_resp_send_err(
+            req, HTTPD_400_BAD_REQUEST,
+            "Invalid value");
+        return ESP_OK;
+    }
+
+    light_control_command_t command = {
+        .value = (uint8_t)value
+    };
+
+    if (strcmp(req->uri, "/api/mode") == 0)
+    {
+        if (value >= LIGHT_EFFECT_COUNT)
+        {
+            httpd_resp_send_err(
+                req, HTTPD_400_BAD_REQUEST,
+                "Invalid mode");
+            return ESP_OK;
+        }
+
+        command.type = LIGHT_CONTROL_SET_MODE;
+    }
+    else if (strcmp(req->uri, "/api/brightness") == 0)
+    {
+        command.type = LIGHT_CONTROL_SET_BRIGHTNESS;
+    }
+    else if (strcmp(req->uri, "/api/beat-brightness") == 0)
+    {
+        command.type = LIGHT_CONTROL_SET_BEAT_BRIGHTNESS;
+    }
+    else
+    {
+        httpd_resp_send_err(
+            req, HTTPD_404_NOT_FOUND,
+            "Unknown command");
+        return ESP_OK;
+    }
+
+    if (!light_control_send(&command))
+    {
+        httpd_resp_send_err(
+            req, HTTPD_500_INTERNAL_SERVER_ERROR,
+            "Command queue full");
+        return ESP_OK;
+    }
+
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_sendstr(req, "OK");
+
+    return ESP_OK;
 }
 
 void web_server_init(void)
@@ -104,4 +207,31 @@ void web_server_init(void)
 
     ESP_LOGI(TAG, "Wi-Fi: LightOrgan");
     ESP_LOGI(TAG, "Open http://192.168.4.1");
+
+    httpd_uri_t mode_uri = {
+        .uri = "/api/mode",
+        .method = HTTP_POST,
+        .handler = control_handler,
+    };
+
+    httpd_uri_t brightness_uri = {
+        .uri = "/api/brightness",
+        .method = HTTP_POST,
+        .handler = control_handler,
+    };
+
+    httpd_uri_t beat_uri = {
+        .uri = "/api/beat-brightness",
+        .method = HTTP_POST,
+        .handler = control_handler,
+    };
+
+    ESP_ERROR_CHECK(
+        httpd_register_uri_handler(server, &mode_uri));
+
+    ESP_ERROR_CHECK(
+        httpd_register_uri_handler(server, &brightness_uri));
+
+    ESP_ERROR_CHECK(
+        httpd_register_uri_handler(server, &beat_uri));
 }

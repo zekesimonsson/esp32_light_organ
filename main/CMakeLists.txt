@@ -5,6 +5,7 @@ idf_component_register(
         "audio_analyzer.c"
         "light_effects.c"
         "dmx_output.c"
+        "light_control.c"
         "web_server.c"
 
     INCLUDE_DIRS

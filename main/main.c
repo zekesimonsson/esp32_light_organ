@@ -8,6 +8,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "web_server.h"
+#include "light_control.h"
 
 static void dmx_task(void *arg)
 {
@@ -31,10 +32,14 @@ void app_main(void)
 
     audio_input_init();
     audio_analyzer_init();
+
     light_effects_init();
     light_effects_set_brightness(30);
     light_effects_set_beat_brightness(45);
     light_effects_set_mode(LIGHT_EFFECT_ALTERNATE);
+
+    light_control_init();
+
     dmx_output_init();
     web_server_init();
 
@@ -50,6 +55,8 @@ void app_main(void)
 
     while (1)
     {
+        light_control_process();
+
         size_t sample_count =
             audio_input_read(
                 samples,
