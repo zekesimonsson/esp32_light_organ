@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include "light_control.h"
 #include "esp_wifi.h"
@@ -12,6 +13,7 @@
 #include "nvs_flash.h"
 
 static const char *TAG = "WEB";
+
 
 static const char html_page[] =
     "<!DOCTYPE html>"
@@ -26,25 +28,40 @@ static const char html_page[] =
     "margin:5px;font-size:15px}"
     "input{width:85%;max-width:350px}"
     ".selected{background:#16836f}"
+    "#blackoutBtn{background:#a52b36;margin-top:22px;"
+    "padding:17px 35px;font-weight:bold}"
+    "#blackoutBtn.active{background:#16836f}"
     "</style>"
     "</head>"
     "<body>"
     "<h1>Zeke's Light Machine</h1>"
     "<p>ESP32-S3 DMX Controller</p>"
+
     "<h2>Effect mode</h2>"
     "<button id='m0' onclick='setMode(0)'>Classic</button>"
     "<button id='m1' onclick='setMode(1)'>Beat Chase</button>"
     "<button id='m2' onclick='setMode(2)'>Alternate</button>"
+
     "<h2>Master brightness: <span id='bv'>30</span>%</h2>"
-    "<input type='range' min='0' max='100' value='30'"
-    " oninput='bv.textContent=this.value'"
+    "<input id='brightness' type='range' min='0' max='100' value='30'"
+    " oninput='document.getElementById(\"bv\").textContent=this.value'"
     " onchange='send(\"/api/brightness\",this.value)'>"
+
     "<h2>Beat brightness: <span id='wv'>45</span>%</h2>"
-    "<input type='range' min='0' max='100' value='45'"
-    " oninput='wv.textContent=this.value'"
+    "<input id='beatBrightness' type='range' min='0' max='100' value='45'"
+    " oninput='document.getElementById(\"wv\").textContent=this.value'"
     " onchange='send(\"/api/beat-brightness\",this.value)'>"
-    "<p id='status'>Ready</p>"
+
+    "<div>"
+    "<button id='blackoutBtn' onclick='toggleBlackout()'>BLACKOUT</button>"
+    "</div>"
+
+    "<p id='status'>Connecting...</p>"
+
     "<script>"
+
+    "let blackout=false;"
+
     "async function send(url,value){"
     "try{"
     "let r=await fetch(url,{method:'POST',body:String(value)});"
@@ -55,13 +72,50 @@ static const char html_page[] =
     "document.getElementById('status').textContent='Error: '+e.message;"
     "return false;"
     "}}"
-    "async function setMode(mode){"
-    "if(await send('/api/mode',mode)){"
-    "document.querySelectorAll('button').forEach("
+
+    "function updateMode(mode){"
+    "document.querySelectorAll('[id^=m]').forEach("
     "b=>b.classList.remove('selected'));"
     "document.getElementById('m'+mode).classList.add('selected');"
+    "}"
+
+    "async function setMode(mode){"
+    "if(await send('/api/mode',mode)){"
+    "updateMode(mode);"
     "}}"
-    "document.getElementById('m2').classList.add('selected');"
+
+    "function updateBlackoutButton(){"
+    "const b=document.getElementById('blackoutBtn');"
+    "b.textContent=blackout?'ENABLE LIGHTS':'BLACKOUT';"
+    "b.classList.toggle('active',blackout);"
+    "}"
+
+    "async function toggleBlackout(){"
+    "const newState=!blackout;"
+    "if(await send('/api/blackout',newState?1:0)){"
+    "blackout=newState;"
+    "updateBlackoutButton();"
+    "}}"
+
+    "async function loadStatus(){"
+    "try{"
+    "const r=await fetch('/api/status');"
+    "if(!r.ok)throw Error('HTTP '+r.status);"
+    "const s=await r.json();"
+    "updateMode(s.mode);"
+    "document.getElementById('brightness').value=s.brightness;"
+    "document.getElementById('bv').textContent=s.brightness;"
+    "document.getElementById('beatBrightness').value=s.beat_brightness;"
+    "document.getElementById('wv').textContent=s.beat_brightness;"
+    "blackout=s.blackout;"
+    "updateBlackoutButton();"
+    "document.getElementById('status').textContent='Ready';"
+    "}catch(e){"
+    "document.getElementById('status').textContent='Status error: '+e.message;"
+    "}}"
+
+    "loadStatus();"
+
     "</script>"
     "</body>"
     "</html>";
@@ -123,6 +177,18 @@ static esp_err_t control_handler(httpd_req_t *req)
     {
         command.type = LIGHT_CONTROL_SET_BEAT_BRIGHTNESS;
     }
+    else if (strcmp(req->uri, "/api/blackout") == 0)
+    {
+        if (value > 1)
+        {
+            httpd_resp_send_err(
+                req, HTTPD_400_BAD_REQUEST,
+                "Invalid blackout value");
+            return ESP_OK;
+        }
+
+        command.type = LIGHT_CONTROL_SET_BLACKOUT;
+    }
     else
     {
         httpd_resp_send_err(
@@ -143,6 +209,32 @@ static esp_err_t control_handler(httpd_req_t *req)
     httpd_resp_sendstr(req, "OK");
 
     return ESP_OK;
+}
+
+static esp_err_t status_handler(httpd_req_t *req)
+{
+    light_control_status_t status;
+    light_control_get_status(&status);
+
+    char response[160];
+
+    snprintf(
+        response,
+        sizeof(response),
+        "{"
+        "\"mode\":%d,"
+        "\"brightness\":%u,"
+        "\"beat_brightness\":%u,"
+        "\"blackout\":%s"
+        "}",
+        (int)status.mode,
+        (unsigned)status.brightness,
+        (unsigned)status.beat_brightness,
+        status.blackout ? "true" : "false");
+
+    httpd_resp_set_type(req, "application/json");
+
+    return httpd_resp_sendstr(req, response);
 }
 
 void web_server_init(void)
@@ -234,4 +326,22 @@ void web_server_init(void)
 
     ESP_ERROR_CHECK(
         httpd_register_uri_handler(server, &beat_uri));
+
+    httpd_uri_t blackout_uri = {
+        .uri = "/api/blackout",
+        .method = HTTP_POST,
+        .handler = control_handler,
+    };
+
+    ESP_ERROR_CHECK(
+        httpd_register_uri_handler(server, &blackout_uri));
+
+    httpd_uri_t status_uri = {
+        .uri = "/api/status",
+        .method = HTTP_GET,
+        .handler = status_handler,
+    };
+
+    ESP_ERROR_CHECK(
+        httpd_register_uri_handler(server, &status_uri));
 }

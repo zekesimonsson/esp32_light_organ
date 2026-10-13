@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "audio_input.h"
 #include "audio_analyzer.h"
@@ -34,10 +35,6 @@ void app_main(void)
     audio_analyzer_init();
 
     light_effects_init();
-    light_effects_set_brightness(30);
-    light_effects_set_beat_brightness(45);
-    light_effects_set_mode(LIGHT_EFFECT_ALTERNATE);
-
     light_control_init();
 
     dmx_output_init();
@@ -72,6 +69,15 @@ void app_main(void)
             light_effects_process(
                 &analysis,
                 &lights);
+
+            light_control_status_t status;
+
+            light_control_get_status(&status);
+
+            if (status.blackout)
+            {
+                memset(&lights, 0, sizeof(lights));
+            }
 
             for (int i = 0; i < LIGHT_COUNT; i++)
             {
