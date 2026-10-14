@@ -10,6 +10,8 @@
 #include "freertos/task.h"
 #include "web_server.h"
 #include "light_control.h"
+#include "nvs_flash.h"
+#include "esp_err.h"
 
 static void dmx_task(void *arg)
 {
@@ -35,6 +37,18 @@ void app_main(void)
     audio_analyzer_init();
 
     light_effects_init();
+    
+    esp_err_t err = nvs_flash_init();
+
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES ||
+        err == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+
+    ESP_ERROR_CHECK(err);
+    
     light_control_init();
 
     dmx_output_init();

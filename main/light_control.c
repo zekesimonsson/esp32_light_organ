@@ -3,6 +3,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "nvs.h"
+#include "esp_log.h"
 
 #define LIGHT_CONTROL_QUEUE_LENGTH 10
 
@@ -16,6 +18,97 @@ static light_control_status_t current_status = {
     .blackout = false
 };
 
+static const char *TAG = "LIGHT_CTRL";
+
+static void load_settings(void)
+{
+    nvs_handle_t handle;
+
+    esp_err_t err = nvs_open(
+        "light_organ",
+        NVS_READONLY,
+        &handle);
+
+    if (err == ESP_ERR_NVS_NOT_FOUND)
+    {
+        ESP_LOGI(TAG, "No saved settings, using defaults");
+        return;
+    }
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "NVS open failed: %s",
+                 esp_err_to_name(err));
+        return;
+    }
+
+    uint8_t value;
+
+    if (nvs_get_u8(handle, "mode", &value) == ESP_OK &&
+        value < LIGHT_EFFECT_COUNT)
+    {
+        current_status.mode = (light_effect_mode_t)value;
+    }
+
+    if (nvs_get_u8(handle, "brightness", &value) == ESP_OK &&
+        value <= 100)
+    {
+        current_status.brightness = value;
+    }
+
+    if (nvs_get_u8(handle, "beat_bright", &value) == ESP_OK &&
+        value <= 100)
+    {
+        current_status.beat_brightness = value;
+    }
+
+    nvs_close(handle);
+
+    ESP_LOGI(TAG, "Loaded: mode=%d brightness=%u beat=%u",
+             (int)current_status.mode,
+             (unsigned)current_status.brightness,
+             (unsigned)current_status.beat_brightness);
+}
+
+static void save_settings(void)
+{
+    nvs_handle_t handle;
+
+    esp_err_t err = nvs_open(
+        "light_organ",
+        NVS_READWRITE,
+        &handle);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "NVS open failed: %s",
+                 esp_err_to_name(err));
+        return;
+    }
+
+    light_control_status_t status;
+    light_control_get_status(&status);
+
+    err = nvs_set_u8(handle, "mode", (uint8_t)status.mode);
+
+    if (err == ESP_OK)
+        err = nvs_set_u8(handle, "brightness", status.brightness);
+
+    if (err == ESP_OK)
+        err = nvs_set_u8(handle, "beat_bright", status.beat_brightness);
+
+    if (err == ESP_OK)
+        err = nvs_commit(handle);
+
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to save settings: %s",
+                 esp_err_to_name(err));
+    }
+
+    nvs_close(handle);
+}
+
 void light_control_init(void)
 {
     command_queue = xQueueCreate(
@@ -26,6 +119,8 @@ void light_control_init(void)
 
     configASSERT(command_queue != NULL);
     configASSERT(status_mutex != NULL);
+    
+    load_settings();
 
     light_effects_set_mode(current_status.mode);
     light_effects_set_brightness(current_status.brightness);
@@ -125,7 +220,10 @@ void light_control_process(void)
 
         xSemaphoreGive(status_mutex);
 
-        (void)valid;
+        if (valid && command.type != LIGHT_CONTROL_SET_BLACKOUT)
+        {
+            save_settings();
+        }
     }
 }
 
