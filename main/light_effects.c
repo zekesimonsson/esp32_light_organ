@@ -13,6 +13,7 @@ static uint8_t beat_brightness = 100;
 static int alternate_group = 0;
 static light_effect_mode_t auto_effect = LIGHT_EFFECT_CLASSIC;
 static int64_t auto_last_switch_us = 0;
+static int color_chase_position = 0;
 
 static light_effect_mode_t effect_mode =
     LIGHT_EFFECT_BEAT_CHASE;
@@ -148,11 +149,57 @@ static void effect_alternate(
     }
 }
 
+static void effect_color_chase(
+    uint8_t red,
+    uint8_t green,
+    uint8_t blue,
+    uint8_t white,
+    light_state_t *state)
+{
+    for (int i = 0; i < LIGHT_COUNT; i++)
+    {
+        int position =
+            (i - color_chase_position + LIGHT_COUNT)
+            % LIGHT_COUNT;
+
+        switch (position)
+        {
+            case 0:
+                // Bass-driven red
+                state->light[i].red =
+                    apply_brightness(red);
+                break;
+
+            case 1:
+                // Mid-driven green
+                state->light[i].green =
+                    apply_brightness(green);
+                break;
+
+            case 2:
+                // Treble-driven blue
+                state->light[i].blue =
+                    apply_brightness(blue);
+                break;
+
+            case 3:
+                // White flash on beat
+                state->light[i].white =
+                    apply_beat_brightness(white);
+                break;
+
+            default:
+                break;
+        }
+    }
+}
+
 void light_effects_init(void)
 {
     beat_flash = 0.0f;
     beat_light = -1;
     alternate_group = 0;
+    color_chase_position = 0;
 }
 
 void light_effects_process(
@@ -193,6 +240,9 @@ void light_effects_process(
     if (audio->beat)
     {
         beat_flash = 1.0f;
+
+        color_chase_position =
+            (color_chase_position + 1) % LIGHT_COUNT;
 
         beat_light++;
 
@@ -249,6 +299,15 @@ void light_effects_process(
 
         case LIGHT_EFFECT_ALTERNATE:
             effect_alternate(
+                red,
+                green,
+                blue,
+                white,
+                state);
+            break;
+
+        case LIGHT_EFFECT_COLOR_CHASE:
+            effect_color_chase(
                 red,
                 green,
                 blue,
