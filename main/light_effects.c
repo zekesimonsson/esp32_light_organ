@@ -224,6 +224,11 @@ void light_effects_process(
                     auto_effect = LIGHT_EFFECT_ALTERNATE;
                     break;
 
+                case LIGHT_EFFECT_ALTERNATE:
+                    auto_effect = LIGHT_EFFECT_COLOR_CHASE;
+                    break;
+
+                case LIGHT_EFFECT_COLOR_CHASE:
                 default:
                     auto_effect = LIGHT_EFFECT_CLASSIC;
                     break;
