@@ -19,11 +19,11 @@ typedef struct
     light_t light[LIGHT_COUNT];
 } light_state_t;
 
-typedef enum
-{
+typedef enum {
     LIGHT_EFFECT_CLASSIC = 0,
     LIGHT_EFFECT_BEAT_CHASE,
     LIGHT_EFFECT_ALTERNATE,
+    LIGHT_EFFECT_AUTO,
     LIGHT_EFFECT_COUNT
 } light_effect_mode_t;
 

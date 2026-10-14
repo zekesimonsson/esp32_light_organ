@@ -41,7 +41,7 @@ static const char html_page[] =
     "<button id='m0' onclick='setMode(0)'>Classic</button>"
     "<button id='m1' onclick='setMode(1)'>Beat Chase</button>"
     "<button id='m2' onclick='setMode(2)'>Alternate</button>"
-
+    "<button id='m3' onclick='setMode(3)'>AUTO</button>"
     "<h2>Master brightness: <span id='bv'>30</span>%</h2>"
     "<input id='brightness' type='range' min='0' max='100' value='30'"
     " oninput='document.getElementById(\"bv\").textContent=this.value'"

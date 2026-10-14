@@ -1,12 +1,18 @@
+#include <stdint.h>
+#include <string.h>
+
+#include "esp_timer.h"
 #include "light_effects.h"
 
-#include <string.h>
+#define AUTO_INTERVAL_US (30LL * 1000000LL)
 
 static float beat_flash = 0.0f;
 static int beat_light = -1;
 static uint8_t master_brightness = 100;
 static uint8_t beat_brightness = 100;
 static int alternate_group = 0;
+static light_effect_mode_t auto_effect = LIGHT_EFFECT_CLASSIC;
+static int64_t auto_last_switch_us = 0;
 
 static light_effect_mode_t effect_mode =
     LIGHT_EFFECT_BEAT_CHASE;
@@ -153,6 +159,35 @@ void light_effects_process(
     const audio_analysis_t *audio,
     light_state_t *state)
 {
+    light_effect_mode_t active_mode = effect_mode;
+
+    if (effect_mode == LIGHT_EFFECT_AUTO)
+    {   
+        int64_t now = esp_timer_get_time();
+
+        if (now - auto_last_switch_us >= AUTO_INTERVAL_US)
+        {
+            switch (auto_effect)
+            {
+                case LIGHT_EFFECT_CLASSIC:
+                    auto_effect = LIGHT_EFFECT_BEAT_CHASE;
+                    break;
+
+                case LIGHT_EFFECT_BEAT_CHASE:
+                    auto_effect = LIGHT_EFFECT_ALTERNATE;
+                    break;
+
+                default:
+                    auto_effect = LIGHT_EFFECT_CLASSIC;
+                    break;
+            }
+
+            auto_last_switch_us = now;
+        }
+
+        active_mode = auto_effect;
+    }    
+
     memset(state, 0, sizeof(*state));
 
     if (audio->beat)
@@ -192,7 +227,7 @@ void light_effects_process(
     uint8_t white =
         level_to_dmx(beat_flash);
 
-    switch (effect_mode)
+    switch (active_mode)
     {
         case LIGHT_EFFECT_CLASSIC:
             effect_classic(
@@ -247,12 +282,20 @@ void light_effects_set_beat_brightness(uint8_t percent)
 }
 
 
-void light_effects_set_mode(
-    light_effect_mode_t mode)
+void light_effects_set_mode(light_effect_mode_t mode)
 {
-    if (mode < LIGHT_EFFECT_COUNT)
+    if (mode >= LIGHT_EFFECT_COUNT)
     {
-        effect_mode = mode;
+        return;
     }
+
+    if (mode == LIGHT_EFFECT_AUTO &&
+        effect_mode != LIGHT_EFFECT_AUTO)
+    {
+        auto_effect = LIGHT_EFFECT_CLASSIC;
+        auto_last_switch_us = esp_timer_get_time();
+    }
+
+    effect_mode = mode;
 }
 
