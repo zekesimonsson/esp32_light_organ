@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 
 #include "esp_timer.h"
 #include "light_effects.h"
@@ -64,6 +65,8 @@ static void effect_classic(
     }
 }
 
+
+
 static void effect_beat_chase(
     uint8_t red,
     uint8_t green,
@@ -71,43 +74,58 @@ static void effect_beat_chase(
     uint8_t white,
     light_state_t *state)
 {
+    static const uint8_t colors[4][3] = {
+        {255,   0,   0},
+        {  0, 255,   0},
+        {  0,   0, 255},
+        {180,   0, 255}
+    };
+
+    float music_level =
+        (red + green + blue) / (3.0f * 255.0f);
+
+    float background =
+        (0.20f + 0.35f * music_level) *
+        (float)master_brightness / 100.0f;
+
     float beat_level = white / 255.0f;
 
     for (int i = 0; i < LIGHT_COUNT; i++)
     {
-        /*
-         * Normal RGB is suppressed during the beat.
-         * At the start of a beat it is completely off.
-         */
-        float rgb_factor = 1.0f - (beat_level * 0.65f);
+        int color_index =
+            (i - color_chase_position + LIGHT_COUNT)
+            % LIGHT_COUNT;
 
-        state->light[i].red =
-            apply_brightness(
-                (uint8_t)(red * rgb_factor));
+        float intensity = background;
 
-        state->light[i].green =
-            apply_brightness(
-                (uint8_t)(green * rgb_factor));
-
-        state->light[i].blue =
-            apply_brightness(
-                (uint8_t)(blue * rgb_factor));
-
-        /*
-         * Only the selected chase light gets
-         * the white beat flash.
-         */
         if (i == beat_light)
         {
-            state->light[i].white =
-                apply_beat_brightness(white);
+            float pulse =
+                beat_level * 0.75f *
+                (float)beat_brightness / 100.0f;
+
+            intensity += pulse;
         }
-        else
+
+        if (intensity > 1.0f)
         {
-            state->light[i].white = 0;
+            intensity = 1.0f;
         }
+
+        state->light[i].red =
+            (uint8_t)(colors[color_index][0] * intensity);
+
+        state->light[i].green =
+            (uint8_t)(colors[color_index][1] * intensity);
+
+        state->light[i].blue =
+            (uint8_t)(colors[color_index][2] * intensity);
+
+        state->light[i].white = 0;
     }
 }
+
+
 
 static void effect_alternate(
     uint8_t red,
@@ -194,6 +212,83 @@ static void effect_color_chase(
     }
 }
 
+#define COLOR_WAVE_PERIOD_US (8LL * 1000000LL)
+#define TWO_PI 6.28318530718f
+
+static void effect_color_wave(
+    uint8_t red,
+    uint8_t green,
+    uint8_t blue,
+    uint8_t white,
+    light_state_t *state)
+{
+    // Pure RGB colors: red, green, blue, purple
+    static const uint8_t colors[4][3] = {
+        {255,   0,   0},
+        {  0, 255,   0},
+        {  0,   0, 255},
+        {180,   0, 255}
+    };
+
+    int64_t now = esp_timer_get_time();
+
+    // Position advances continuously through four colors
+    float position =
+        4.0f *
+        (float)(now % COLOR_WAVE_PERIOD_US) /
+        (float)COLOR_WAVE_PERIOD_US;
+
+    // Music intensity with a minimum background level
+    float music_level =
+        (red + green + blue) / (3.0f * 255.0f);
+
+    float intensity = 0.30f + 0.70f * music_level;
+
+    // Extra brightness pulse on beat
+    float beat_level = white / 255.0f;
+    intensity += beat_level * 0.35f;
+
+    if (intensity > 1.0f)
+    {
+        intensity = 1.0f;
+    }
+
+    for (int i = 0; i < LIGHT_COUNT; i++)
+    {
+        float p = position + (float)i;
+
+        int color_index = ((int)p) % 4;
+        int next_index = (color_index + 1) % 4;
+
+        float blend = p - (float)((int)p);
+
+        // Smooth transition between colors
+        float r =
+            colors[color_index][0] * (1.0f - blend) +
+            colors[next_index][0] * blend;
+
+        float g =
+            colors[color_index][1] * (1.0f - blend) +
+            colors[next_index][1] * blend;
+
+        float b =
+            colors[color_index][2] * (1.0f - blend) +
+            colors[next_index][2] * blend;
+
+        state->light[i].red =
+            apply_brightness((uint8_t)(r * intensity));
+
+        state->light[i].green =
+            apply_brightness((uint8_t)(g * intensity));
+
+        state->light[i].blue =
+            apply_brightness((uint8_t)(b * intensity));
+
+        // No white channel
+        state->light[i].white = 0;
+    }
+}
+
 void light_effects_init(void)
 {
     beat_flash = 0.0f;
@@ -229,6 +324,10 @@ void light_effects_process(
                     break;
 
                 case LIGHT_EFFECT_COLOR_CHASE:
+                    auto_effect = LIGHT_EFFECT_COLOR_WAVE;
+                    break;
+
+                case LIGHT_EFFECT_COLOR_WAVE:
                 default:
                     auto_effect = LIGHT_EFFECT_CLASSIC;
                     break;
@@ -313,6 +412,15 @@ void light_effects_process(
 
         case LIGHT_EFFECT_COLOR_CHASE:
             effect_color_chase(
+                red,
+                green,
+                blue,
+                white,
+                state);
+            break;
+
+        case LIGHT_EFFECT_COLOR_WAVE:
+            effect_color_wave(
                 red,
                 green,
                 blue,

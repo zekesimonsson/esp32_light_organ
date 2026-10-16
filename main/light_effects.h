@@ -25,6 +25,7 @@ typedef enum {
     LIGHT_EFFECT_ALTERNATE,
     LIGHT_EFFECT_AUTO,
     LIGHT_EFFECT_COLOR_CHASE,
+    LIGHT_EFFECT_COLOR_WAVE,
     LIGHT_EFFECT_COUNT
 } light_effect_mode_t;
 
