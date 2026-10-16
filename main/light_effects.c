@@ -289,6 +289,45 @@ static void effect_color_wave(
     }
 }
 
+
+#define WHITE_FLASH_DURATION_US 50000LL  // 50 ms
+
+static int64_t white_flash_start_us = 0;
+
+static void effect_color_chase_flash(
+    uint8_t red,
+    uint8_t green,
+    uint8_t blue,
+    uint8_t white,
+    light_state_t *state)
+{
+    // Start with the existing Color Chase effect
+    effect_color_chase(red, green, blue, white, state);
+
+    int64_t now = esp_timer_get_time();
+
+    // Check whether the white flash is active
+    if (white_flash_start_us != 0 &&
+        now - white_flash_start_us < WHITE_FLASH_DURATION_US)
+    {
+        // Flash all four lamps
+        for (int i = 0; i < LIGHT_COUNT; i++)
+        {
+            state->light[i].white =
+                apply_beat_brightness(255);
+        }
+    }
+    else
+    {
+        // No white light between beats
+        for (int i = 0; i < LIGHT_COUNT; i++)
+        {
+            state->light[i].white = 0;
+        }
+    }
+}
+
+
 void light_effects_init(void)
 {
     beat_flash = 0.0f;
@@ -326,8 +365,14 @@ void light_effects_process(
                 case LIGHT_EFFECT_COLOR_CHASE:
                     auto_effect = LIGHT_EFFECT_COLOR_WAVE;
                     break;
-
                 case LIGHT_EFFECT_COLOR_WAVE:
+                    auto_effect = LIGHT_EFFECT_COLOR_CHASE_FLASH;
+                    break;
+
+                case LIGHT_EFFECT_COLOR_CHASE_FLASH:
+                    auto_effect = LIGHT_EFFECT_CLASSIC;
+                    break;
+ 
                 default:
                     auto_effect = LIGHT_EFFECT_CLASSIC;
                     break;
@@ -344,6 +389,7 @@ void light_effects_process(
     if (audio->beat)
     {
         beat_flash = 1.0f;
+        white_flash_start_us = esp_timer_get_time();
 
         color_chase_position =
             (color_chase_position + 1) % LIGHT_COUNT;
@@ -426,6 +472,11 @@ void light_effects_process(
                 blue,
                 white,
                 state);
+            break;
+
+        case LIGHT_EFFECT_COLOR_CHASE_FLASH:
+            effect_color_chase_flash(
+                red, green, blue, white, state);
             break;
 
         default:
