@@ -113,7 +113,7 @@ void app_main(void)
                     base_channel + 3,
                     lights.light[i].white);
             }
-
+#if 0
             printf(
                 "%s | "
                 "L1:%3d %3d %3d %3d | "
@@ -143,6 +143,7 @@ void app_main(void)
                 lights.light[3].blue,
                 lights.light[3].white
             );
+#endif
         }
     }
 }

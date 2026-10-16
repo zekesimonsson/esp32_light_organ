@@ -30,7 +30,9 @@ static const char html_page[] =
     ".selected{background:#16836f}"
     "#blackoutBtn{background:#a52b36;margin-top:22px;"
     "padding:17px 35px;font-weight:bold}"
-    "#blackoutBtn.active{background:#16836f}"
+    "#blackoutBtn.active{background:#16836f}"    
+    "#noiseGateBtn{background:#16836f;min-width:180px}"
+    "#noiseGateBtn.off{background:#a52b36}"
     "</style>"
     "</head>"
     "<body>"
@@ -57,7 +59,13 @@ static const char html_page[] =
     "<input id='beatBrightness' type='range' min='0' max='100' value='45'"
     " oninput='document.getElementById(\"wv\").textContent=this.value'"
     " onchange='send(\"/api/beat-brightness\",this.value)'>"
-
+    "<h2>Audio settings</h2>"
+    
+    "<div>"
+    "<button id='noiseGateBtn' onclick='toggleNoiseGate()'>"
+    "Noise Gate: ON</button>"
+    "</div>"
+    
     "<div>"
     "<button id='blackoutBtn' onclick='toggleBlackout()'>BLACKOUT</button>"
     "</div>"
@@ -67,6 +75,21 @@ static const char html_page[] =
     "<script>"
 
     "let blackout=false;"
+
+    "let noiseGate=true;"
+
+    "function updateNoiseGateButton(){"
+    "const b=document.getElementById('noiseGateBtn');"
+    "b.textContent=noiseGate?'Noise Gate: ON':'Noise Gate: OFF';"
+    "b.classList.toggle('off',!noiseGate);"
+    "}"
+
+    "async function toggleNoiseGate(){"
+    "const newState=!noiseGate;"
+    "if(await send('/api/noise-gate',newState?1:0)){"
+    "noiseGate=newState;"
+    "updateNoiseGateButton();"
+    "}}"
 
     "async function send(url,value){"
     "try{"
@@ -115,6 +138,8 @@ static const char html_page[] =
     "document.getElementById('wv').textContent=s.beat_brightness;"
     "blackout=s.blackout;"
     "updateBlackoutButton();"
+    "noiseGate=s.noise_gate;"
+    "updateNoiseGateButton();"
     "document.getElementById('status').textContent='Ready';"
     "}catch(e){"
     "document.getElementById('status').textContent='Status error: '+e.message;"
@@ -195,6 +220,18 @@ static esp_err_t control_handler(httpd_req_t *req)
 
         command.type = LIGHT_CONTROL_SET_BLACKOUT;
     }
+    else if (strcmp(req->uri, "/api/noise-gate") == 0)
+    {
+        if (value > 1)
+        {
+            httpd_resp_send_err(
+                req, HTTPD_400_BAD_REQUEST,
+                "Invalid noise gate value");
+            return ESP_OK;
+        }
+
+        command.type = LIGHT_CONTROL_SET_NOISE_GATE;
+    }
     else
     {
         httpd_resp_send_err(
@@ -231,12 +268,15 @@ static esp_err_t status_handler(httpd_req_t *req)
         "\"mode\":%d,"
         "\"brightness\":%u,"
         "\"beat_brightness\":%u,"
-        "\"blackout\":%s"
+        "\"blackout\":%s,"
+        "\"noise_gate\":%s"
         "}",
         (int)status.mode,
         (unsigned)status.brightness,
         (unsigned)status.beat_brightness,
-        status.blackout ? "true" : "false");
+        status.blackout ? "true" : "false",
+        status.noise_gate ? "true" : "false");
+
 
     httpd_resp_set_type(req, "application/json");
 
@@ -331,6 +371,15 @@ void web_server_init(void)
 
     ESP_ERROR_CHECK(
         httpd_register_uri_handler(server, &blackout_uri));
+
+    httpd_uri_t noise_gate_uri = {
+        .uri = "/api/noise-gate",
+        .method = HTTP_POST,
+        .handler = control_handler,
+    };
+
+    ESP_ERROR_CHECK(
+        httpd_register_uri_handler(server, &noise_gate_uri));
 
     httpd_uri_t status_uri = {
         .uri = "/api/status",

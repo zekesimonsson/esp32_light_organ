@@ -31,6 +31,8 @@ typedef struct
  */
 void audio_analyzer_init(void);
 
+void audio_analyzer_set_noise_gate(bool enabled);
+bool audio_analyzer_get_noise_gate(void);
 
 /**
  * Analyze one block of audio samples.

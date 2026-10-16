@@ -21,6 +21,15 @@ static float bass_average = 0.0f;
 static bool beat_initialized = false;
 static int beat_holdoff = 0;
 
+#define AUDIO_SILENCE_THRESHOLD 3500.0f
+#define AUDIO_ACTIVE_THRESHOLD 4200.0f
+
+static bool audio_active = false;
+static int active_frames = 0;
+
+#define AUDIO_ACTIVE_FRAMES 15
+static bool noise_gate_enabled = true;
+
 typedef struct
 {
     float noise_floor;
@@ -249,6 +258,20 @@ static bool detect_beat(float bass_level)
     return false;
 }
 
+void audio_analyzer_set_noise_gate(bool enabled)
+{
+    noise_gate_enabled = enabled;
+
+    // Reset detection when changing mode
+    audio_active = false;
+    active_frames = 0;
+}
+
+bool audio_analyzer_get_noise_gate(void)
+{
+    return noise_gate_enabled;
+}
+
 bool audio_analyzer_process(
     const int32_t *samples,
     size_t sample_count,
@@ -333,6 +356,13 @@ bool audio_analyzer_process(
             )
         );
 
+    static int rms_log_counter = 0;
+
+    if (++rms_log_counter >= 50)
+    {
+        printf("Audio RMS: %.0f\n", result->rms);
+        rms_log_counter = 0;
+    }
 
     /*
      * FFT
@@ -415,11 +445,61 @@ bool audio_analyzer_process(
             &treble_normalizer
         );
     
-    result->beat =
-    detect_beat(result->bass_level);
-    /*
-     * Start collecting the next FFT block.
-     */
+    if (noise_gate_enabled)
+    {
+        /*
+        * Silence detection with hysteresis.
+        */
+        if (audio_active)
+        {
+            if (result->rms < AUDIO_SILENCE_THRESHOLD)
+            {
+                audio_active = false;
+                active_frames = 0;
+            }
+        }
+        else
+        {
+            if (result->rms > AUDIO_ACTIVE_THRESHOLD)
+            {
+                active_frames++;
+
+                if (active_frames >= AUDIO_ACTIVE_FRAMES)
+                {
+                    audio_active = true;
+                    active_frames = 0;
+                }
+            }
+            else
+            {
+                active_frames = 0;
+            }
+        }
+
+        if (!audio_active)
+        {
+            result->bass_level = 0.0f;
+            result->low_mid_level = 0.0f;
+            result->mid_level = 0.0f;
+            result->high_mid_level = 0.0f;
+            result->treble_level = 0.0f;
+
+            result->beat = false;
+
+            beat_initialized = false;
+            beat_holdoff = 0;
+        }
+        else
+        {
+            result->beat = detect_beat(result->bass_level);
+        }
+    }
+    else
+    {
+        // Original behavior without noise gate
+        result->beat = detect_beat(result->bass_level);
+    }
+
     fft_sample_count = 0;
 
     return true;

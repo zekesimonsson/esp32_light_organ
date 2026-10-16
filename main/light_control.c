@@ -1,5 +1,6 @@
 #include "light_control.h"
 
+#include "audio_analyzer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
@@ -15,7 +16,8 @@ static light_control_status_t current_status = {
     .mode = LIGHT_EFFECT_ALTERNATE,
     .brightness = 30,
     .beat_brightness = 45,
-    .blackout = false
+    .blackout = false,
+    .noise_gate = true
 };
 
 static const char *TAG = "LIGHT_CTRL";
@@ -126,6 +128,7 @@ void light_control_init(void)
     light_effects_set_brightness(current_status.brightness);
     light_effects_set_beat_brightness(
         current_status.beat_brightness);
+    audio_analyzer_set_noise_gate(current_status.noise_gate);
 }
 
 bool light_control_send(
@@ -213,6 +216,21 @@ void light_control_process(void)
                 }
                 break;
 
+            case LIGHT_CONTROL_SET_NOISE_GATE:
+                if (command.value <= 1)
+                {
+                    current_status.noise_gate =
+                        (command.value != 0);
+
+                    audio_analyzer_set_noise_gate(
+                        current_status.noise_gate);
+                }
+                else
+                {
+                    valid = false;
+                }
+                break;
+
             default:
                 valid = false;
                 break;
@@ -220,7 +238,9 @@ void light_control_process(void)
 
         xSemaphoreGive(status_mutex);
 
-        if (valid && command.type != LIGHT_CONTROL_SET_BLACKOUT)
+        if (valid &&
+            command.type != LIGHT_CONTROL_SET_BLACKOUT &&
+            command.type != LIGHT_CONTROL_SET_NOISE_GATE)
         {
             save_settings();
         }

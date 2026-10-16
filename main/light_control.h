@@ -11,7 +11,8 @@ typedef enum
     LIGHT_CONTROL_SET_MODE,
     LIGHT_CONTROL_SET_BRIGHTNESS,
     LIGHT_CONTROL_SET_BEAT_BRIGHTNESS,
-    LIGHT_CONTROL_SET_BLACKOUT
+    LIGHT_CONTROL_SET_BLACKOUT,
+    LIGHT_CONTROL_SET_NOISE_GATE
 } light_control_command_type_t;
 
 typedef struct
@@ -26,6 +27,7 @@ typedef struct
     uint8_t brightness;
     uint8_t beat_brightness;
     bool blackout;
+    bool noise_gate;
 } light_control_status_t;
 
 void light_control_init(void);

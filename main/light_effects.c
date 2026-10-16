@@ -481,7 +481,7 @@ void light_effects_process(
 
                 case LIGHT_EFFECT_SPECTRUM_CHASE:
                     auto_effect = LIGHT_EFFECT_CLASSIC;
-
+                    break;
                 default:
                     auto_effect = LIGHT_EFFECT_CLASSIC;
                     break;
