@@ -45,6 +45,8 @@ static const char html_page[] =
     "<button id='m4' onclick='setMode(4)'>Color Chase</button>"
     "<button id='m5' onclick='setMode(5)'>Color Wave</button>"
     "<button id='m6' onclick='setMode(6)'>Color Chase Flash</button>"
+    "<button id='m7' onclick='setMode(7)'>Frequency Spectrum</button>"
+    "<button id='m8' onclick='setMode(8)'>Spectrum Chase</button>"
 
     "<h2>Master brightness: <span id='bv'>30</span>%</h2>"
     "<input id='brightness' type='range' min='0' max='100' value='30'"

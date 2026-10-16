@@ -328,6 +328,108 @@ static void effect_color_chase_flash(
 }
 
 
+static void effect_frequency_spectrum(
+    const audio_analysis_t *audio,
+    light_state_t *state)
+{
+    // Four frequency levels
+    float levels[LIGHT_COUNT] = {
+        audio->bass_level,
+        audio->low_mid_level,
+        audio->mid_level,
+        fmaxf(audio->high_mid_level,
+              audio->treble_level)
+    };
+
+    // Clear, saturated colors
+    static const uint8_t colors[4][3] = {
+        {255,   0,   0},  // Red
+        {  0, 255,   0},  // Green
+        {  0,   0, 255},  // Blue
+        {180,   0, 255}   // Purple
+    };
+
+    for (int i = 0; i < LIGHT_COUNT; i++)
+    {
+        float level = levels[i];
+
+        // Ignore very weak signals
+        if (level < 0.05f)
+        {
+            level = 0.0f;
+        }
+
+        // Apply master brightness
+        state->light[i].red =
+            apply_brightness(
+                (uint8_t)(colors[i][0] * level));
+
+        state->light[i].green =
+            apply_brightness(
+                (uint8_t)(colors[i][1] * level));
+
+        state->light[i].blue =
+            apply_brightness(
+                (uint8_t)(colors[i][2] * level));
+
+        // No white light
+        state->light[i].white = 0;
+    }
+}
+
+
+static void effect_spectrum_chase(
+    const audio_analysis_t *audio,
+    light_state_t *state)
+{
+    float levels[LIGHT_COUNT] = {
+        audio->bass_level,
+        audio->low_mid_level,
+        audio->mid_level,
+        fmaxf(audio->high_mid_level,
+              audio->treble_level)
+    };
+
+    static const uint8_t colors[4][3] = {
+        {255,   0,   0},  // Bass: red
+        {  0, 255,   0},  // Low mid: green
+        {  0,   0, 255},  // Mid: blue
+        {180,   0, 255}   // Treble: purple
+    };
+
+    for (int i = 0; i < LIGHT_COUNT; i++)
+    {
+        // Rotate frequency/color assignments on beats
+        int band =
+            (i - color_chase_position + LIGHT_COUNT)
+            % LIGHT_COUNT;
+
+        float level = levels[band];
+
+        // Completely off for weak signals
+        if (level < 0.05f)
+        {
+            level = 0.0f;
+        }
+
+        state->light[i].red =
+            apply_brightness(
+                (uint8_t)(colors[band][0] * level));
+
+        state->light[i].green =
+            apply_brightness(
+                (uint8_t)(colors[band][1] * level));
+
+        state->light[i].blue =
+            apply_brightness(
+                (uint8_t)(colors[band][2] * level));
+
+        // No white light
+        state->light[i].white = 0;
+    }
+}
+
+
 void light_effects_init(void)
 {
     beat_flash = 0.0f;
@@ -370,9 +472,16 @@ void light_effects_process(
                     break;
 
                 case LIGHT_EFFECT_COLOR_CHASE_FLASH:
-                    auto_effect = LIGHT_EFFECT_CLASSIC;
+                    auto_effect = LIGHT_EFFECT_FREQUENCY_SPECTRUM;
                     break;
  
+                case LIGHT_EFFECT_FREQUENCY_SPECTRUM:
+                    auto_effect = LIGHT_EFFECT_SPECTRUM_CHASE;
+                    break;
+
+                case LIGHT_EFFECT_SPECTRUM_CHASE:
+                    auto_effect = LIGHT_EFFECT_CLASSIC;
+
                 default:
                     auto_effect = LIGHT_EFFECT_CLASSIC;
                     break;
@@ -477,6 +586,14 @@ void light_effects_process(
         case LIGHT_EFFECT_COLOR_CHASE_FLASH:
             effect_color_chase_flash(
                 red, green, blue, white, state);
+            break;
+
+        case LIGHT_EFFECT_FREQUENCY_SPECTRUM:
+            effect_frequency_spectrum(audio, state);
+            break;
+
+        case LIGHT_EFFECT_SPECTRUM_CHASE:
+            effect_spectrum_chase(audio, state);
             break;
 
         default:
